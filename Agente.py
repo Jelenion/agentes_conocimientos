@@ -1,32 +1,26 @@
-# Librerias importadas
 import pygame
 import time
 import random
 from collections import deque
+import heapq
+import sys
 
 # ---------- Lógica del Puzzle ----------
 goal_state = [[1, 2, 3],
               [4, 0, 5],
               [6, 7, 8]]
-# Movimientos disponibles en X - Y
-# Arriba (-1, 0)
-# Abajo (1, 0)
-# Izquierda (0, -1)
-# Derecha (0, 1)
+
 moves = [(-1, 0), (1, 0), (0, -1), (0, 1)]
 
-# Convertir matriz a tupla
 def to_tuple(matrix):
     return tuple(tuple(row) for row in matrix)
 
-# Buscar valor 0
 def find_zero(state):
     for i in range(3):
         for j in range(3):
             if state[i][j] == 0:
                 return i, j
 
-# Mostrar posibles movimientos de 0
 def get_neighbors(state):
     x, y = find_zero(state)
     neighbors = []
@@ -38,19 +32,64 @@ def get_neighbors(state):
             neighbors.append(new_state)
     return neighbors
 
-# Encontrar solucion deseada
+# ---------- Agente No Informado: BFS ----------
 def bfs(start_state):
-    visited = set() # guarda tuplas vistas
-    queue = deque([(start_state, [])]) # cola que estado actual y como llegar al objetivo
+    visited = set()
+    queue = deque([(start_state, [])])
+    visited.add(to_tuple(start_state))
+    nodos_expandidos = 0
+    start = time.time()
     while queue:
         current, path = queue.popleft()
+        nodos_expandidos += 1
         if current == goal_state:
-            return path + [current]
-        visited.add(to_tuple(current))
+            end = time.time()
+            return path + [current], nodos_expandidos, end - start
         for neighbor in get_neighbors(current):
-            if to_tuple(neighbor) not in visited:
+            neighbor_tuple = to_tuple(neighbor)
+            if neighbor_tuple not in visited:
+                visited.add(neighbor_tuple)
                 queue.append((neighbor, path + [current]))
-    return None
+    end = time.time()
+    return None, nodos_expandidos, end - start
+
+# ---------- Agente Informado: A* ----------
+def manhattan_distance(state):
+    distance = 0
+    for i in range(3):
+        for j in range(3):
+            value = state[i][j]
+            if value != 0:
+                goal_x = (value - 1) // 3
+                goal_y = (value - 1) % 3
+                distance += abs(i - goal_x) + abs(j - goal_y)
+    return distance
+
+def a_star(start_state):
+    visited = {}
+    heap = []
+    start_tuple = to_tuple(start_state)
+    h = manhattan_distance(start_state)
+    heapq.heappush(heap, (h, 0, start_state, []))
+    visited[start_tuple] = 0
+    nodos_expandidos = 0
+    start = time.time()
+    while heap:
+        f, g, current, path = heapq.heappop(heap)
+        nodos_expandidos += 1
+        current_tuple = to_tuple(current)
+        if current == goal_state:
+            end = time.time()
+            return path + [current], nodos_expandidos, end - start
+        for neighbor in get_neighbors(current):
+            neighbor_tuple = to_tuple(neighbor)
+            new_g = g + 1
+            if neighbor_tuple not in visited or new_g < visited[neighbor_tuple]:
+                visited[neighbor_tuple] = new_g
+                h = manhattan_distance(neighbor)
+                heapq.heappush(heap, (new_g + h, new_g, neighbor, path + [current]))
+    end = time.time()
+    return None, nodos_expandidos, end - start
 
 def is_solvable(state):
     flat_list = [num for row in state for num in row if num != 0]
@@ -74,15 +113,14 @@ def draw_board(screen, state, font, tile_size, offset_y):
     apple_green = (140, 220, 100)
     border_rect = pygame.Rect(45, offset_y - 5, tile_size * 3 + 10, tile_size * 3 + 10)
     pygame.draw.rect(screen, apple_green, border_rect, border_radius=15)
-
     for i in range(3):
         for j in range(3):
             value = state[i][j]
             rect = pygame.Rect(j * tile_size + 50, i * tile_size + offset_y, tile_size, tile_size)
-            pygame.draw.rect(screen, (255, 255, 255), rect, border_radius=12)  # fondo blanco
-            pygame.draw.rect(screen, (200, 200, 200), rect, 2, border_radius=12)  # borde gris claro
+            pygame.draw.rect(screen, (255, 255, 255), rect, border_radius=12)
+            pygame.draw.rect(screen, (200, 200, 200), rect, 2, border_radius=12)
             if value != 0:
-                color = (200, 0, 0) if value % 2 == 0 else (0, 150, 0)  # rojo para pares, verde para impares
+                color = (200, 0, 0) if value % 2 == 0 else (0, 150, 0)
                 text = font.render(str(value), True, color)
                 text_rect = text.get_rect(center=rect.center)
                 screen.blit(text, text_rect)
@@ -98,11 +136,9 @@ def draw_buttons(screen, font):
     pause_btn = pygame.Rect(10, 20, 110, 40)
     resume_btn = pygame.Rect(150, 20, 110, 40)
     reset_btn = pygame.Rect(280, 20, 110, 40)
-
     draw_button(screen, pause_btn, "Pausar", font)
     draw_button(screen, resume_btn, "Reanudar", font)
     draw_button(screen, reset_btn, "Reiniciar", font)
-
     return pause_btn, resume_btn, reset_btn
 
 def draw_info(screen, font, tiempo, movimientos, width, height):
@@ -111,15 +147,28 @@ def draw_info(screen, font, tiempo, movimientos, width, height):
     screen.blit(tiempo_text, (width - 180, height - 40))
     screen.blit(movs_text, (width - 350, height - 40))
 
-# ---------- Lógica principal ----------
-def ejecutar_interactivo():
+def draw_stats(screen, font, nodos_expandidos, tiempo, height):
+    stats_text = [
+        f"Nodos expandidos: {nodos_expandidos}",
+        f"Tiempo de ejecución: {tiempo:.4f} s"
+    ]
+    for idx, txt in enumerate(stats_text):
+        text = font.render(txt, True, (0, 0, 0))
+        screen.blit(text, (50, height - 110 + idx * 25))
+
+# ---------- Ejecución del juego ----------
+def ejecutar_interactivo(algoritmo='bfs'):
     pygame.init()
     tile_size = 100
     offset_y = 80
     screen_width = tile_size * 3 + 100
-    screen_height = tile_size * 3 + offset_y + 60
+    # Aumenta el alto para dejar espacio a las estadísticas
+    screen_height = tile_size * 3 + offset_y + 160  # antes era +60
     screen = pygame.display.set_mode((screen_width, screen_height))
-    pygame.display.set_caption("Puzzle 8 - Interactivo")
+    titulo = "Puzzle 8 - Agente BFS"
+    if(algoritmo!='bfs'):
+        titulo = "Puzzle 8 - Agente A*"
+    pygame.display.set_caption(titulo)
     font = pygame.font.SysFont(None, 28)
     big_font = pygame.font.SysFont(None, 60)
 
@@ -127,7 +176,10 @@ def ejecutar_interactivo():
     paused = False
     step_index = 0
     start_state = generar_estado_resoluble()
-    solution = bfs(start_state)
+    if algoritmo == 'bfs':
+        solution, nodos_expandidos, tiempo_ejecucion = bfs(start_state)
+    else:
+        solution, nodos_expandidos, tiempo_ejecucion = a_star(start_state)
     start_time = time.time()
     pause_time = 0
     pause_start = None
@@ -151,6 +203,10 @@ def ejecutar_interactivo():
 
         draw_info(screen, font, tiempo_mostrar, movimientos, screen_width, screen_height)
 
+        # Ahora las estadísticas se dibujan más abajo
+        if completado:
+            draw_stats(screen, font, nodos_expandidos, tiempo_ejecucion, screen_height)
+
         if not paused and not completado and step_index < len(solution) - 1:
             if current_time - start_time - pause_time > step_index * 0.5:
                 step_index += 1
@@ -158,27 +214,26 @@ def ejecutar_interactivo():
                 if step_index == len(solution) - 1:
                     tiempo_finalizado = current_time - start_time - pause_time
                     completado = True
-                    
 
         pygame.display.flip()
 
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 running = False
-
             elif event.type == pygame.MOUSEBUTTONDOWN:
                 if pause_btn.collidepoint(event.pos) and not paused and not completado:
                     paused = True
                     pause_start = time.time()
-
                 elif resume_btn.collidepoint(event.pos) and paused and not completado:
                     paused = False
                     pause_time += time.time() - pause_start
                     pause_start = None
-
                 elif reset_btn.collidepoint(event.pos):
                     start_state = generar_estado_resoluble()
-                    solution = bfs(start_state)
+                    if algoritmo == 'bfs':
+                        solution, nodos_expandidos, tiempo_ejecucion = bfs(start_state)
+                    else:
+                        solution, nodos_expandidos, tiempo_ejecucion = a_star(start_state)
                     step_index = 0
                     start_time = time.time()
                     pause_time = 0
@@ -190,5 +245,9 @@ def ejecutar_interactivo():
 
     pygame.quit()
 
-# ---------- Ejecutar ----------
-ejecutar_interactivo()
+# ---------- Punto de entrada ----------
+if __name__ == '__main__':
+    algoritmo = 'bfs'
+    if len(sys.argv) > 1 and sys.argv[1].lower() == 'a*':
+        algoritmo = 'a*'
+    ejecutar_interactivo(algoritmo)

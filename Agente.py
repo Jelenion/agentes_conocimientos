@@ -6,21 +6,26 @@ import heapq
 import sys
 
 # ---------- Lógica del Puzzle ----------
+# Estado meta del puzzle 8
 goal_state = [[1, 2, 3],
               [4, 0, 5],
               [6, 7, 8]]
 
+# Movimientos posibles: arriba, abajo, izquierda, derecha
 moves = [(-1, 0), (1, 0), (0, -1), (0, 1)]
 
+# Convierte una matriz (lista de listas) en una tupla de tuplas. Útil para usar como clave en sets o diccionarios.
 def to_tuple(matrix):
     return tuple(tuple(row) for row in matrix)
 
+# Busca la posición (i, j) del cero (espacio vacío) en el estado del puzzle
 def find_zero(state):
     for i in range(3):
         for j in range(3):
             if state[i][j] == 0:
                 return i, j
 
+# Genera todos los estados vecinos posibles moviendo el cero en las 4 direcciones
 def get_neighbors(state):
     x, y = find_zero(state)
     neighbors = []
@@ -33,6 +38,8 @@ def get_neighbors(state):
     return neighbors
 
 # ---------- Agente No Informado: BFS ----------
+# Algoritmo de búsqueda en anchura (BFS) para resolver el puzzle 8
+# Retorna la solución (lista de estados), nodos expandidos y tiempo de ejecución
 def bfs(start_state):
     visited = set()
     queue = deque([(start_state, [])])
@@ -54,6 +61,8 @@ def bfs(start_state):
     return None, nodos_expandidos, end - start
 
 # ---------- Agente Informado: A* ----------
+# Calcula la suma de las distancias de Manhattan de cada ficha a su posición objetivo
+# Heurística para el algoritmo A*
 def manhattan_distance(state):
     distance = 0
     for i in range(3):
@@ -65,6 +74,8 @@ def manhattan_distance(state):
                 distance += abs(i - goal_x) + abs(j - goal_y)
     return distance
 
+# Algoritmo A* para resolver el puzzle 8 usando la heurística de Manhattan
+# Retorna la solución (lista de estados), nodos expandidos y tiempo de ejecución
 def a_star(start_state):
     visited = {}
     heap = []
@@ -91,6 +102,7 @@ def a_star(start_state):
     end = time.time()
     return None, nodos_expandidos, end - start
 
+# Verifica si un estado del puzzle es resoluble contando las inversiones
 def is_solvable(state):
     flat_list = [num for row in state for num in row if num != 0]
     inversions = 0
@@ -100,6 +112,7 @@ def is_solvable(state):
                 inversions += 1
     return inversions % 2 == 0
 
+# Genera un estado aleatorio resoluble para el puzzle 8
 def generar_estado_resoluble():
     nums = list(range(9))
     while True:
@@ -109,6 +122,7 @@ def generar_estado_resoluble():
             return state
 
 # ---------- Visualización Pygame ----------
+# Dibuja el tablero del puzzle 8 en la pantalla usando Pygame
 def draw_board(screen, state, font, tile_size, offset_y):
     apple_green = (140, 220, 100)
     border_rect = pygame.Rect(45, offset_y - 5, tile_size * 3 + 10, tile_size * 3 + 10)
@@ -125,6 +139,7 @@ def draw_board(screen, state, font, tile_size, offset_y):
                 text_rect = text.get_rect(center=rect.center)
                 screen.blit(text, text_rect)
 
+# Dibuja un botón con texto en la pantalla
 def draw_button(screen, rect, text, font):
     pygame.draw.rect(screen, (180, 180, 180), rect, border_radius=8)
     pygame.draw.rect(screen, (100, 100, 100), rect, 2, border_radius=8)
@@ -132,6 +147,8 @@ def draw_button(screen, rect, text, font):
     label_rect = label.get_rect(center=rect.center)
     screen.blit(label, label_rect)
 
+# Dibuja los botones de Pausar, Reanudar y Reiniciar
+# Retorna los rectángulos de los botones para detección de clics
 def draw_buttons(screen, font):
     pause_btn = pygame.Rect(10, 20, 110, 40)
     resume_btn = pygame.Rect(150, 20, 110, 40)
@@ -141,12 +158,14 @@ def draw_buttons(screen, font):
     draw_button(screen, reset_btn, "Reiniciar", font)
     return pause_btn, resume_btn, reset_btn
 
+# Dibuja la información de tiempo transcurrido y movimientos realizados
 def draw_info(screen, font, tiempo, movimientos, width, height):
     tiempo_text = font.render(f"Tiempo: {int(tiempo)}s", True, (0, 0, 0))
     movs_text = font.render(f"Movimientos: {movimientos}", True, (0, 0, 0))
     screen.blit(tiempo_text, (width - 180, height - 40))
     screen.blit(movs_text, (width - 350, height - 40))
 
+# Dibuja las estadísticas del agente: nodos expandidos y tiempo de ejecución
 def draw_stats(screen, font, nodos_expandidos, tiempo, height):
     stats_text = [
         f"Nodos expandidos: {nodos_expandidos}",
@@ -157,6 +176,8 @@ def draw_stats(screen, font, nodos_expandidos, tiempo, height):
         screen.blit(text, (50, height - 110 + idx * 25))
 
 # ---------- Ejecución del juego ----------
+# Lógica principal de la interfaz interactiva del juego
+# Permite pausar, reanudar y reiniciar la partida, y muestra estadísticas al finalizar
 def ejecutar_interactivo(algoritmo='bfs'):
     pygame.init()
     tile_size = 100
@@ -207,6 +228,7 @@ def ejecutar_interactivo(algoritmo='bfs'):
         if completado:
             draw_stats(screen, font, nodos_expandidos, tiempo_ejecucion, screen_height)
 
+        # Avanza los pasos de la solución automáticamente
         if not paused and not completado and step_index < len(solution) - 1:
             if current_time - start_time - pause_time > step_index * 0.5:
                 step_index += 1
@@ -217,6 +239,7 @@ def ejecutar_interactivo(algoritmo='bfs'):
 
         pygame.display.flip()
 
+        # Manejo de eventos de la ventana y botones
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 running = False
@@ -247,6 +270,7 @@ def ejecutar_interactivo(algoritmo='bfs'):
 
 # ---------- Punto de entrada ----------
 if __name__ == '__main__':
+    # Permite elegir el algoritmo desde la línea de comandos
     algoritmo = 'bfs'
     if len(sys.argv) > 1 and sys.argv[1].lower() == 'a*':
         algoritmo = 'a*'

@@ -70,6 +70,118 @@ def ejecutar_agente(nombre, usar_archivo=False):
         cmd.append("--archivo")
     subprocess.run(cmd)
 
+# ---------- Función para seleccionar el estado inicial del juego ----------
+def seleccionar_estado():
+    import tkinter as tk
+    from tkinter import simpledialog, messagebox
+
+    # Ventana oculta de Tkinter solo para los diálogos
+    root = tk.Tk()
+    root.withdraw()
+
+    opcion = messagebox.askquestion("Seleccionar estado", "¿Quieres ingresar manualmente la matriz inicial?\n(Si eliges 'No', será aleatoria)")
+
+    if opcion == 'yes':
+        while True:
+            entrada = simpledialog.askstring("Matriz inicial", "Introduce 9 números (0-8) separados por espacios:")
+            if entrada is None:
+                # Si cancela, regresa None
+                return None
+            try:
+                nums = list(map(int, entrada.strip().split()))
+                if sorted(nums) != list(range(9)):
+                    raise ValueError
+                state = [nums[i:i + 3] for i in range(0, 9, 3)]
+                # Verifica si es resoluble
+                def is_solvable(state):
+                    flat_list = [num for row in state for num in row if num != 0]
+                    inversions = 0
+                    for i in range(len(flat_list)):
+                        for j in range(i + 1, len(flat_list)):
+                            if flat_list[i] > flat_list[j]:
+                                inversions += 1
+                    return inversions % 2 == 0
+                if not is_solvable(state):
+                    messagebox.showerror("No resoluble", "¡La matriz ingresada NO tiene solución!")
+                    continue
+                return state
+            except Exception:
+                messagebox.showerror("Error", "Entrada inválida. Debes ingresar los números del 0 al 8 sin repetir.")
+    else:
+        return None
+
+# ---------- Función para ingresar la matriz manualmente usando Pygame ----------
+def ingresar_matriz_pygame():
+    matriz = [[None for _ in range(3)] for _ in range(3)]
+    tile_size = 80
+    offset_x = (width - tile_size * 3) // 2
+    offset_y = (height - tile_size * 3) // 2
+    font_big = pygame.font.SysFont(None, 48)
+    selected = [0, 0]
+    ingresados = set()
+    running = True
+
+    while running:
+        screen.fill((240, 240, 240))
+        # Dibuja el tablero
+        for i in range(3):
+            for j in range(3):
+                rect = pygame.Rect(offset_x + j * tile_size, offset_y + i * tile_size, tile_size, tile_size)
+                pygame.draw.rect(screen, (255, 255, 255), rect)
+                pygame.draw.rect(screen, (100, 100, 100), rect, 2)
+                if matriz[i][j] is not None:
+                    num_text = font_big.render(str(matriz[i][j]), True, (0, 0, 0))
+                    text_rect = num_text.get_rect(center=rect.center)
+                    screen.blit(num_text, text_rect)
+        # Dibuja el selector
+        sel_rect = pygame.Rect(offset_x + selected[1] * tile_size, offset_y + selected[0] * tile_size, tile_size, tile_size)
+        pygame.draw.rect(screen, (140, 220, 100), sel_rect, 4)
+
+        # Mensaje de instrucciones
+        msg = "Haz clic o usa flechas. Escribe 0-8. Enter para aceptar."
+        msg_text = font.render(msg, True, (0, 0, 0))
+        screen.blit(msg_text, (offset_x, offset_y + tile_size * 3 + 10))
+
+        pygame.display.flip()
+
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                return None
+            elif event.type == pygame.KEYDOWN:
+                if event.key == pygame.K_RETURN:
+                    # Validar matriz completa y sin repetidos
+                    flat = [n for row in matriz for n in row]
+                    if None in flat:
+                        continue
+                    if sorted(flat) != list(range(9)):
+                        continue
+                    return matriz
+                elif event.key in [pygame.K_UP, pygame.K_w]:
+                    selected[0] = (selected[0] - 1) % 3
+                elif event.key in [pygame.K_DOWN, pygame.K_s]:
+                    selected[0] = (selected[0] + 1) % 3
+                elif event.key in [pygame.K_LEFT, pygame.K_a]:
+                    selected[1] = (selected[1] - 1) % 3
+                elif event.key in [pygame.K_RIGHT, pygame.K_d]:
+                    selected[1] = (selected[1] + 1) % 3
+                elif pygame.K_0 <= event.key <= pygame.K_9:
+                    num = event.key - pygame.K_0
+                    # Solo permite 0-8 y sin repetir
+                    flat = [n for row in matriz for n in row if n is not None]
+                    if num in flat:
+                        continue
+                    if num > 8:
+                        continue
+                    matriz[selected[0]][selected[1]] = num
+            elif event.type == pygame.MOUSEBUTTONDOWN:
+                mx, my = event.pos
+                for i in range(3):
+                    for j in range(3):
+                        rect = pygame.Rect(offset_x + j * tile_size, offset_y + i * tile_size, tile_size, tile_size)
+                        if rect.collidepoint(mx, my):
+                            selected = [i, j]
+    return None
+
 # ---------- Función principal del menú. Dibuja la interfaz y gestiona los eventos de los botones ----------
 def main():
     running = True
@@ -100,7 +212,9 @@ def main():
                     ejecutar_agente("a*")
                 # Ejecuta ambos agentes en paralelo con el mismo estado inicial
                 elif both_button_rect.collidepoint(event.pos):
-                    estado = generar_estado_resoluble()
+                    estado = seleccionar_estado()
+                    if estado is None:
+                        estado = generar_estado_resoluble()
                     guardar_estado_inicial(estado)
                     threading.Thread(target=ejecutar_agente, args=("bfs", True)).start()
                     threading.Thread(target=ejecutar_agente, args=("a*", True)).start()

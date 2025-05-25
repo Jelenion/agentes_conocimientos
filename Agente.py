@@ -4,6 +4,9 @@ import random
 from collections import deque
 import heapq
 import sys
+import json
+import threading
+import subprocess
 
 # ---------- Lógica del Puzzle ----------
 # Estado meta del puzzle 8
@@ -104,13 +107,60 @@ def a_star(start_state):
 
 # Verifica si un estado del puzzle es resoluble contando las inversiones
 def is_solvable(state):
-    flat_list = [num for row in state for num in row if num != 0]
+    """
+    Verifica si un estado del puzzle 8 es resoluble.
+    Retorna True si es resoluble, False si no lo es.
+    Lanza ValueError si la matriz no es válida.
+    """
+    # Validación básica de la matriz
+    flat_list = [num for row in state for num in row]
+    if sorted(flat_list) != list(range(9)):
+        raise ValueError("La matriz debe contener todos los números del 0 al 8 sin repetir.")
+
+    # Calcula las inversiones (sin contar el 0)
+    flat_list_no_zero = [num for num in flat_list if num != 0]
     inversions = 0
-    for i in range(len(flat_list)):
-        for j in range(i + 1, len(flat_list)):
-            if flat_list[i] > flat_list[j]:
+    for i in range(len(flat_list_no_zero)):
+        for j in range(i + 1, len(flat_list_no_zero)):
+            if flat_list_no_zero[i] > flat_list_no_zero[j]:
                 inversions += 1
     return inversions % 2 == 0
+
+# mostrar estado sin resolucion
+def mostrar_estado_no_resoluble(state):
+    import pygame
+    pygame.init()
+    tile_size = 100
+    offset_y = 60
+    screen_width = tile_size * 3 + 60
+    screen_height = tile_size * 3 + offset_y + 60
+    screen = pygame.display.set_mode((screen_width, screen_height))
+    pygame.display.set_caption("¡Estado sin solución!")
+    font = pygame.font.SysFont(None, 48)
+    small_font = pygame.font.SysFont(None, 28)
+    running = True
+    while running:
+        screen.fill((250, 220, 220))
+        # Dibuja la matriz
+        for i in range(3):
+            for j in range(3):
+                value = state[i][j]
+                rect = pygame.Rect(j * tile_size + 30, i * tile_size + offset_y, tile_size, tile_size)
+                pygame.draw.rect(screen, (255, 255, 255), rect, border_radius=10)
+                pygame.draw.rect(screen, (200, 100, 100), rect, 2, border_radius=10)
+                if value != 0:
+                    text = font.render(str(value), True, (180, 0, 0))
+                    text_rect = text.get_rect(center=rect.center)
+                    screen.blit(text, text_rect)
+        # Mensaje
+        msg = small_font.render("¡Este estado NO tiene solución!", True, (180, 0, 0))
+        screen.blit(msg, (30, 20))
+        msg2 = small_font.render("Cierra esta ventana para continuar...", True, (80, 0, 0))
+        screen.blit(msg2, (30, screen_height - 40))
+        pygame.display.flip()
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                running = False
 
 # Genera un estado aleatorio resoluble para el puzzle 8
 def generar_estado_resoluble():
@@ -120,6 +170,8 @@ def generar_estado_resoluble():
         state = [nums[i:i + 3] for i in range(0, 9, 3)]
         if is_solvable(state):
             return state
+        else:
+            mostrar_estado_no_resoluble(state)
 
 # ---------- Visualización Pygame ----------
 # Dibuja el tablero del puzzle 8 en la pantalla usando Pygame
@@ -175,10 +227,25 @@ def draw_stats(screen, font, nodos_expandidos, tiempo, height):
         text = font.render(txt, True, (0, 0, 0))
         screen.blit(text, (50, height - 110 + idx * 25))
 
+# Guarda el estado inicial en un archivo JSON
+def guardar_estado_inicial(estado):
+    with open("estado_inicial.json", "w") as f:
+        json.dump(estado, f)
+
+def cargar_estado_inicial():
+    with open("estado_inicial.json", "r") as f:
+        return json.load(f)
+
+def ejecutar_agente(nombre, usar_archivo=False):
+    cmd = [sys.executable, "Agente.py", nombre]
+    if usar_archivo:
+        cmd.append("--archivo")
+    subprocess.Popen(cmd)
+
 # ---------- Ejecución del juego ----------
 # Lógica principal de la interfaz interactiva del juego
 # Permite pausar, reanudar y reiniciar la partida, y muestra estadísticas al finalizar
-def ejecutar_interactivo(algoritmo='bfs'):
+def ejecutar_interactivo(algoritmo='bfs', start_state=None):
     pygame.init()
     tile_size = 100
     offset_y = 80
@@ -196,7 +263,6 @@ def ejecutar_interactivo(algoritmo='bfs'):
     running = True
     paused = False
     step_index = 0
-    start_state = generar_estado_resoluble()
     if algoritmo == 'bfs':
         solution, nodos_expandidos, tiempo_ejecucion = bfs(start_state)
     else:
@@ -270,8 +336,16 @@ def ejecutar_interactivo(algoritmo='bfs'):
 
 # ---------- Punto de entrada ----------
 if __name__ == '__main__':
-    # Permite elegir el algoritmo desde la línea de comandos
     algoritmo = 'bfs'
-    if len(sys.argv) > 1 and sys.argv[1].lower() == 'a*':
-        algoritmo = 'a*'
-    ejecutar_interactivo(algoritmo)
+    usar_archivo = False
+    if len(sys.argv) > 1:
+        if sys.argv[1].lower() == 'a*':
+            algoritmo = 'a*'
+        if len(sys.argv) > 2 and sys.argv[2] == '--archivo':
+            usar_archivo = True
+
+    if usar_archivo:
+        start_state = cargar_estado_inicial()
+    else:
+        start_state = generar_estado_resoluble()
+    ejecutar_interactivo(algoritmo, start_state)

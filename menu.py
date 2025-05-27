@@ -40,16 +40,6 @@ def draw_button(rect, text):
 
 # ---------- Genera un estado aleatorio resoluble para el puzzle 8 ---------- 
 def generar_estado_resoluble():
-    def is_solvable(state):
-        # Verifica si el estado es resoluble contando las inversiones
-        flat_list = [num for row in state for num in row if num != 0]
-        inversions = 0
-        for i in range(len(flat_list)):
-            for j in range(i + 1, len(flat_list)):
-                if flat_list[i] > flat_list[j]:
-                    inversions += 1
-        return inversions % 2 == 0
-
     nums = list(range(9))
     while True:
         random.shuffle(nums)
@@ -61,6 +51,15 @@ def generar_estado_resoluble():
 def guardar_estado_inicial(estado):
     with open("estado_inicial.json", "w") as f:
         json.dump(estado, f)
+
+# ---------- Carga el estado inicial desde un archivo JSON ----------
+def cargar_estado_inicial():
+    try:
+        with open("estado_inicial.json", "r") as f:
+            estado = json.load(f)
+            return estado
+    except Exception:
+        return None
 
 # ---------- Ejecuta el archivo Agente.py con el agente especificado.
 #    Si usar_archivo es True, se pasa el argumento --archivo para que ambos agentes usen el mismo estado inicial ----------
@@ -75,7 +74,6 @@ def seleccionar_estado():
     import tkinter as tk
     from tkinter import simpledialog, messagebox
 
-    # Ventana oculta de Tkinter solo para los diálogos
     root = tk.Tk()
     root.withdraw()
 
@@ -85,22 +83,12 @@ def seleccionar_estado():
         while True:
             entrada = simpledialog.askstring("Matriz inicial", "Introduce 9 números (0-8) separados por espacios:")
             if entrada is None:
-                # Si cancela, regresa None
                 return None
             try:
                 nums = list(map(int, entrada.strip().split()))
                 if sorted(nums) != list(range(9)):
                     raise ValueError
                 state = [nums[i:i + 3] for i in range(0, 9, 3)]
-                # Verifica si es resoluble
-                def is_solvable(state):
-                    flat_list = [num for row in state for num in row if num != 0]
-                    inversions = 0
-                    for i in range(len(flat_list)):
-                        for j in range(i + 1, len(flat_list)):
-                            if flat_list[i] > flat_list[j]:
-                                inversions += 1
-                    return inversions % 2 == 0
                 if not is_solvable(state):
                     messagebox.showerror("No resoluble", "¡La matriz ingresada NO tiene solución!")
                     continue
@@ -182,6 +170,35 @@ def ingresar_matriz_pygame():
                             selected = [i, j]
     return None
 
+# Estado meta del puzzle 8 (debe ser igual al de Agente.py)
+goal_state = [[1, 2, 3],
+              [8, 0, 4],
+              [7, 6, 5]]
+
+def is_solvable(state):
+    """
+    Verifica si un estado del puzzle 8 es resoluble para la meta personalizada.
+    """
+    # Encuentra la posición objetivo de cada número
+    goal_positions = {}
+    for i in range(3):
+        for j in range(3):
+            goal_positions[goal_state[i][j]] = (i, j)
+    # Aplana el estado y la meta
+    flat = [num for row in state for num in row]
+    flat_goal = [num for row in goal_state for num in row]
+    # Calcula las inversiones respecto a la meta personalizada
+    inversions = 0
+    for i in range(9):
+        for j in range(i + 1, 9):
+            if flat[i] != 0 and flat[j] != 0:
+                # Compara la posición en la meta
+                pos_i = flat_goal.index(flat[i])
+                pos_j = flat_goal.index(flat[j])
+                if pos_i > pos_j:
+                    inversions += 1
+    return inversions % 2 == 0
+
 # ---------- Función principal del menú. Dibuja la interfaz y gestiona los eventos de los botones ----------
 def main():
     running = True
@@ -206,10 +223,18 @@ def main():
             elif event.type == pygame.MOUSEBUTTONDOWN:
                 # Ejecuta el agente BFS
                 if bfs_button_rect.collidepoint(event.pos):
-                    ejecutar_agente("bfs")
+                    estado = seleccionar_estado()
+                    if estado is None:
+                        estado = generar_estado_resoluble()
+                    guardar_estado_inicial(estado)
+                    ejecutar_agente("bfs", True)
                 # Ejecuta el agente A*
                 elif a_star_button_rect.collidepoint(event.pos):
-                    ejecutar_agente("a*")
+                    estado = seleccionar_estado()
+                    if estado is None:
+                        estado = generar_estado_resoluble()
+                    guardar_estado_inicial(estado)
+                    ejecutar_agente("a*", True)
                 # Ejecuta ambos agentes en paralelo con el mismo estado inicial
                 elif both_button_rect.collidepoint(event.pos):
                     estado = seleccionar_estado()

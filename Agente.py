@@ -11,8 +11,8 @@ import subprocess
 # ---------- Lógica del Puzzle ----------
 # Estado meta del puzzle 8
 goal_state = [[1, 2, 3],
-              [4, 0, 5],
-              [6, 7, 8]]
+              [8, 0, 4],
+              [7, 6, 5]]
 
 # Movimientos posibles: arriba, abajo, izquierda, derecha
 moves = [(-1, 0), (1, 0), (0, -1), (0, 1)]
@@ -67,14 +67,18 @@ def bfs(start_state):
 # Calcula la suma de las distancias de Manhattan de cada ficha a su posición objetivo
 # Heurística para el algoritmo A*
 def manhattan_distance(state):
+    # Crea un diccionario con la posición objetivo de cada valor
+    goal_positions = {}
+    for i in range(3):
+        for j in range(3):
+            goal_positions[goal_state[i][j]] = (i, j)
     distance = 0
     for i in range(3):
         for j in range(3):
             value = state[i][j]
             if value != 0:
-                goal_x = (value - 1) // 3
-                goal_y = (value - 1) % 3
-                distance += abs(i - goal_x) + abs(j - goal_y)
+                goal_i, goal_j = goal_positions[value]
+                distance += abs(i - goal_i) + abs(j - goal_j)
     return distance
 
 # Algoritmo A* para resolver el puzzle 8 usando la heurística de Manhattan
@@ -267,6 +271,8 @@ def ejecutar_interactivo(algoritmo='bfs', start_state=None):
         solution, nodos_expandidos, tiempo_ejecucion = bfs(start_state)
     else:
         solution, nodos_expandidos, tiempo_ejecucion = a_star(start_state)
+    # --- FIN VERIFICACIÓN ---
+
     start_time = time.time()
     pause_time = 0
     pause_start = None
